@@ -5,7 +5,7 @@ from src.api.app import EXPORTS_DIR
 from src.config import MEDIA_DIR, settings
 from src.models.slide import AgendaItemData, AgendaSlideData, ComparisonTableSlideData, ContentSlideData, \
     ImageSlideData, SectionSlideData, \
-    TableSlideData
+    TableSlideData, TitleSlideData
 from src.services.presentation_creator import PresentationCreator
 from src.services.presentation_store import PresentationStore
 from src.services.slide_creator import SlideCreator
