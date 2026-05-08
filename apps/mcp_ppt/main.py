@@ -1,10 +1,6 @@
-from mcp.server.fastmcp import FastMCP
-from src.mcp_server.tools import register_tools
+import uvicorn
+from src.api.app import app
 
-
-# Create an MCP server
-mcp = FastMCP("PowerPoint Creator", port=8001)
-
-register_tools(mcp)
 if __name__ == "__main__":
-    mcp.run(transport = "streamable-http")
+    uvicorn.run(app, host = "127.0.0.1", port = 8000)
+

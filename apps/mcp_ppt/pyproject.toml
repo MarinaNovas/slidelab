@@ -5,6 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.136.1",
     "mcp[cli]>=1.27.0",
     "python-pptx>=0.6.21",
+    "uvicorn>=0.46.0",
+    "yandex-ai-studio-sdk>=0.20.1",
 ]
