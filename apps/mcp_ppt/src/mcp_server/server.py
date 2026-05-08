@@ -12,7 +12,7 @@ from src.services.slide_creator import SlideCreator
 from src.services.yandex_art_image_generator import YandexArtImageGenerator
 
 # Create an MCP server
-mcp = FastMCP("PowerPoint Creator",  dependencies=["python-pptx","requests"], port=8001)
+mcp = FastMCP("PowerPoint Creator",  dependencies=["python-pptx","requests"], host="0.0.0.0", port=8001)
 
 store = PresentationStore()
 presentation_service = PresentationCreator(store)
