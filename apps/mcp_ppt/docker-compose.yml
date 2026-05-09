@@ -1,5 +1,6 @@
 services:
   api:
+    container_name: mcp_ppt_api
     build:
       context: .
       dockerfile: Dockerfile.api
@@ -7,6 +8,7 @@ services:
       - "8000:8000"
 
   mcp:
+    container_name: mcp_ppt_mcp
     build:
       context: .
       dockerfile: Dockerfile.mcp
