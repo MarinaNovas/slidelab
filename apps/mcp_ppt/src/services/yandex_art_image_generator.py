@@ -56,7 +56,7 @@ class YandexArtImageGenerator:
             "status": "ok",
             "image_id": image_id,
             "image_path": str(image_path),
-            "image_url": f"{self.public_base_url}/exports/images/{file_name}",
+            "image_url": f"{self.public_base_url}/media/{file_name}",
             "prompt": prompt,
             "style": style,
         }
