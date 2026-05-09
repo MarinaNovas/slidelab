@@ -30,7 +30,7 @@ class Settings(BaseSettings):
         "folder_id": settings.YANDEX_FOLDER_ID,
         "auth": self.YANDEX_API_KEY,
         "images_dir": MEDIA_DIR,
-        "public_base_url": self.MCP_PPT_URL,
+        "public_base_url": self.PUBLIC_BASE_URL,
         }
 
 settings = Settings()
