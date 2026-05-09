@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     MCP_PPT_PORT: int
     YANDEX_API_KEY: str
     YANDEX_FOLDER_ID: str
+    PUBLIC_BASE_URL: str
 
     @property
     def MCP_PPT_URL(self):

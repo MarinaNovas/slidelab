@@ -203,7 +203,7 @@ def save_presentation(prs_id: str) -> str:
     file_name = f"{prs_id}.pptx"
     path = EXPORTS_DIR / file_name
     current_prs.prs.save(path)
-    return f"Presentation saved. Download URL: http://127.0.0.1:8000/exports/{file_name}"
+    return f"Presentation saved. Download URL: {settings.PUBLIC_BASE_URL}/exports/{file_name}"
 
 @mcp.tool()
 def add_content_slide(

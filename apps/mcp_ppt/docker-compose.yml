@@ -6,6 +6,8 @@ services:
       dockerfile: Dockerfile.api
     ports:
       - "8000:8000"
+    volumes:
+      - ./exports:/app/exports
 
   mcp:
     container_name: mcp_ppt_mcp
@@ -14,3 +16,5 @@ services:
       dockerfile: Dockerfile.mcp
     ports:
       - "8001:8001"
+    volumes:
+      - ./exports:/app/exports
