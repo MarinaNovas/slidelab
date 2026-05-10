@@ -15,4 +15,4 @@ uv run --with mcp main_mcp.py
 npx -y @modelcontextprotocol/inspector
 
 uv run uvicorn main:app --reload
-taskkill /F /IM uv.exe   
+taskkill /F /IM uv.exe

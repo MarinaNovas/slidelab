@@ -169,8 +169,8 @@ class SlideCreator:
         title_ph = self._get_placeholder(slide, 10)
         title_ph.text = data.title or "AGENDA"
 
-        number_placeholder_ids = [34, 35, 36, 44, 45, 46]
-        title_placeholder_ids = [54, 55, 56, 59, 60, 61]
+        number_placeholder_ids = [44, 45, 46, 34, 35, 36]
+        title_placeholder_ids = [59, 60, 56, 54, 55, 61]
 
         for i, item in enumerate(data.items[:6]):
             number_ph = self._get_placeholder(slide, number_placeholder_ids[i])

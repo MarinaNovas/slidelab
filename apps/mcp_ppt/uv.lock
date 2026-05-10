@@ -686,6 +686,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "mcp", extra = ["cli"] },
+    { name = "pydantic" },
     { name = "python-pptx" },
     { name = "uvicorn" },
     { name = "yandex-ai-studio-sdk" },
@@ -695,6 +696,7 @@ dependencies = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.136.1" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.27.0" },
+    { name = "pydantic", specifier = ">=2.13.3" },
     { name = "python-pptx", specifier = ">=0.6.21" },
     { name = "uvicorn", specifier = ">=0.46.0" },
     { name = "yandex-ai-studio-sdk", specifier = ">=0.20.1" },

@@ -1,8 +1,11 @@
 from mcp.server.fastmcp import FastMCP
 from typing import Optional
 
+from typing_extensions import Any
+
 from src.api.app import EXPORTS_DIR
 from src.config import MEDIA_DIR, settings
+from src.models.presentation import PresentationPlan
 from src.models.slide import AgendaItemData, AgendaSlideData, ComparisonTableSlideData, ContentSlideData, \
     ImageSlideData, SectionSlideData, \
     TableSlideData, TitleSlideData
@@ -19,6 +22,392 @@ presentation_service = PresentationCreator(store)
 slide_service = SlideCreator(store)
 image_service = YandexArtImageGenerator(**settings.YANDEX_ART_CONFIG)
 print(settings.YANDEX_ART_CONFIG)
+
+@mcp.tool()
+def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
+    """
+        Generate a complete PowerPoint presentation from one structured JSON payload.
+
+        Use this tool when the presentation plan is already prepared.
+
+        IMPORTANT:
+        - Do NOT call create_presentation manually.
+        - Do NOT call add_title_slide manually.
+        - Do NOT call add_agenda_slide manually.
+        - Do NOT call add_section_slide manually.
+        - Do NOT call add_content_slide manually.
+        - Do NOT call generate_yandex_art_image manually.
+        - Do NOT call add_image_content_slide manually.
+        - Do NOT call add_comparison_table_slide manually.
+        - Do NOT call add_thank_you_slide manually.
+        - Do NOT call save_presentation manually.
+
+        This tool performs the full workflow internally:
+        1. creates the presentation;
+        2. adds title slide;
+        3. adds agenda slide if agenda is provided;
+        4. adds section slides;
+        5. adds content slides;
+        6. generates images for image_content slides;
+        7. adds image_content slides;
+        8. adds comparison table slides;
+        9. adds final thank-you slide if add_thank_you=true;
+        10. saves presentation if save=true;
+        11. returns download_url.
+
+        Payload structure:
+
+        {
+          "metadata": {
+            "title": "Presentation title",
+            "subtitle": "Optional subtitle or short description",
+            "template_name": null
+          },
+          "agenda": [
+            "Agenda item 1",
+            "Agenda item 2",
+            "Agenda item 3"
+          ],
+          "slides": [
+            {
+              "type": "section",
+              "title": "Section title"
+            },
+            {
+              "type": "content",
+              "title": "Content slide title",
+              "content": [
+                "Short bullet point 1",
+                "Short bullet point 2",
+                "Short bullet point 3"
+              ]
+            },
+            {
+              "type": "image_content",
+              "title": "Image slide title",
+              "section_title": "Current section title",
+              "subtitle": "Short subtitle",
+              "content": [
+                "Short bullet point 1",
+                "Short bullet point 2",
+                "Short bullet point 3"
+              ],
+              "image": {
+                "prompt": "Detailed image generation prompt",
+                "style": "business illustration",
+                "width_ratio": 1,
+                "height_ratio": 1,
+                "seed": null
+              }
+            },
+            {
+              "type": "comparison_table",
+              "title": "Comparison slide title",
+              "sidebar_items": [
+                "Short point for sidebar",
+                "Short point for sidebar"
+              ],
+              "table_title": "Table title",
+              "headers": ["Option", "Pros", "Cons"],
+              "rows": [
+                ["Option A", "Good for speed", "Less flexible"],
+                ["Option B", "More flexible", "More complex"]
+              ]
+            }
+          ],
+          "add_thank_you": true,
+          "save": true
+        }
+
+        Required fields:
+        - metadata.title
+        - slides
+        - every slide.type
+        - every slide.title
+
+        Slide types:
+
+        1. section
+        Use for section divider slides.
+        Required:
+        - type = "section"
+        - title
+
+        Example:
+        {
+          "type": "section",
+          "title": "Market Overview"
+        }
+
+        2. content
+        Use for normal text slides with bullet points.
+        Required:
+        - type = "content"
+        - title
+        - content
+
+        Rules:
+        - content must be a list of short bullet points.
+        - Use 3–6 bullet points.
+        - Avoid long paragraphs.
+
+        Example:
+        {
+          "type": "content",
+          "title": "Key Challenges",
+          "content": [
+            "Manual slide preparation takes too much time",
+            "Visual consistency is difficult to maintain",
+            "Content often lacks structure"
+          ]
+        }
+
+        3. image_content
+        Use for slides with generated image and bullet points.
+        Required:
+        - type = "image_content"
+        - title
+        - content
+        - image.prompt
+
+        Optional:
+        - section_title
+        - subtitle
+        - image.style
+        - image.width_ratio
+        - image.height_ratio
+        - image.seed
+
+        Rules:
+        - Use this slide type for approximately 30–50% of main slides.
+        - The image prompt must describe the visual scene clearly.
+        - The image must support the slide content.
+        - Do not pass image_id manually.
+        - The tool generates the image internally.
+
+        Example:
+        {
+          "type": "image_content",
+          "title": "AI-assisted Presentation Workflow",
+          "section_title": "Solution Architecture",
+          "subtitle": "From user request to final .pptx",
+          "content": [
+            "Agent collects the requirements",
+            "MCP receives a structured plan",
+            "PowerPoint file is generated automatically"
+          ],
+          "image": {
+            "prompt": "modern business workflow diagram, AI assistant creating presentation slides, clean corporate style",
+            "style": "business illustration",
+            "width_ratio": 1,
+            "height_ratio": 1,
+            "seed": null
+          }
+        }
+
+        4. comparison_table
+        Use only for comparisons, metrics, structured data, KPIs, risks, features or scenarios.
+        Required:
+        - type = "comparison_table"
+        - title
+        - headers
+        - rows
+
+        Optional:
+        - sidebar_items
+        - table_title
+
+        Rules:
+        - headers should contain 3–5 columns.
+        - rows should contain 3–7 rows.
+        - Every row must have the same number of cells as headers.
+        - Keep cell text short.
+
+        Example:
+        {
+          "type": "comparison_table",
+          "title": "Approach Comparison",
+          "sidebar_items": [
+            "JSON mode is more stable",
+            "Step-by-step mode is more flexible"
+          ],
+          "table_title": "Generation modes",
+          "headers": ["Mode", "Best for", "Risk"],
+          "rows": [
+            ["JSON", "Stable generation", "Strict schema required"],
+            ["Step-by-step", "Flexible editing", "Wrong call order"],
+            ["Hybrid", "Production use", "More code"]
+          ]
+        }
+
+        Global rules:
+        - Start each major section with a section slide.
+        - After section slide, add 1–3 main slides.
+        - Use image_content for visual explanation.
+        - Use content for ideas, conclusions and explanations.
+        - Use comparison_table only when table format is really needed.
+        - Keep all text short enough to fit on slides.
+        - Do not include markdown in slide text.
+        - Do not include HTML in slide text.
+        - Do not include speaker notes in this payload unless schema supports them.
+        - Do not invent unsupported slide types.
+        - Supported slide types are only:
+          section, content, image_content, comparison_table.
+
+        Returns:
+        {
+          "status": "ok",
+          "prs_id": "...",
+          "download_url": "...",
+          "slides_count": 10,
+          "log": [...]
+        }
+
+        On error returns:
+        {
+          "status": "error",
+          "message": "Error description",
+          "log": [...]
+        }
+    """
+    log: list[str] = []
+
+    try:
+        plan = PresentationPlan.model_validate(payload)
+
+        prs_id = presentation_service.create(
+            title=plan.metadata.title,
+            template_name=plan.metadata.template_name,
+        )
+        log.append(f"Created presentation: {prs_id}")
+
+        title_slide_number = slide_service.add_title_slide(
+            prs_id,
+            TitleSlideData(
+                title=plan.metadata.title,
+                subtitle=plan.metadata.subtitle,
+            ),
+        )
+        log.append(f"Added title slide: {title_slide_number}")
+
+        if plan.agenda:
+            agenda_items = [
+                AgendaItemData(
+                    number=str(i + 1),
+                    title=item,
+                )
+                for i, item in enumerate(plan.agenda[:6])
+            ]
+
+            agenda_slide_number = slide_service.add_agenda_slide(
+                prs_id,
+                AgendaSlideData(
+                    title="AGENDA",
+                    items=agenda_items,
+                ),
+            )
+            log.append(f"Added agenda slide: {agenda_slide_number}")
+
+        for slide in plan.slides:
+            if slide.type == "section":
+                slide_number = slide_service.add_section_slide(
+                    prs_id,
+                    SectionSlideData(
+                        section_title=slide.title,
+                    ),
+                )
+                log.append(f"Added section slide: {slide_number}")
+
+            elif slide.type == "content":
+                slide_number = slide_service.add_content_slide(
+                    prs_id,
+                    ContentSlideData(
+                        title=slide.title,
+                        content=slide.content,
+                    ),
+                )
+                log.append(f"Added content slide: {slide_number}")
+
+            elif slide.type == "image_content":
+                image_result = image_service.generate(
+                    prompt=slide.image.prompt,
+                    style=slide.image.style,
+                    width_ratio=slide.image.width_ratio,
+                    height_ratio=slide.image.height_ratio,
+                    seed=slide.image.seed,
+                )
+
+                if image_result.get("status") != "ok":
+                    raise ValueError(
+                        f"Image generation failed for slide '{slide.title}': {image_result}"
+                    )
+
+                image_id = image_result["image_id"]
+                image_path = MEDIA_DIR / f"{image_id}.jpeg"
+
+                slide_number = slide_service.add_image_content_slide(
+                    prs_id,
+                    ImageSlideData(
+                        title=slide.title,
+                        subtitle=slide.subtitle or slide.section_title or "",
+                        content=slide.content,
+                        image_path=str(image_path),
+                    ),
+                )
+
+                log.append(
+                    f"Added image content slide: {slide_number}, image_id={image_id}"
+                )
+
+            elif slide.type == "comparison_table":
+                slide_number = slide_service.add_comparison_table_slide(
+                    prs_id,
+                    ComparisonTableSlideData(
+                        title=slide.title,
+                        sidebar_items=slide.sidebar_items,
+                        table_title=slide.table_title or "",
+                        headers=slide.headers,
+                        rows=slide.rows,
+                    ),
+                )
+                log.append(f"Added comparison table slide: {slide_number}")
+
+            else:
+                raise ValueError(f"Unsupported slide type: {slide.type}")
+
+        if plan.add_thank_you:
+            slide_number = slide_service.add_thank_you_slide(prs_id)
+            log.append(f"Added thank-you slide: {slide_number}")
+
+        download_url = None
+
+        if plan.save:
+            current_prs = store.get(prs_id)
+
+            if current_prs is None:
+                raise ValueError(f"Presentation '{prs_id}' not found")
+
+            file_name = f"{prs_id}.pptx"
+            path = EXPORTS_DIR / file_name
+            current_prs.prs.save(path)
+
+            download_url = f"{settings.PUBLIC_BASE_URL}/exports/{file_name}"
+            log.append(f"Saved presentation: {download_url}")
+
+        return {
+            "status": "ok",
+            "prs_id": prs_id,
+            "download_url": download_url,
+            "slides_count": len(store.get(prs_id).prs.slides),
+            "log": log,
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "log": log,
+        }
 
 @mcp.tool()
 def create_presentation(title: str,  template_name: Optional[str] = None,) -> str:
