@@ -1,18 +1,81 @@
+# Быстрый старт
+
+## Создание проекта
+
+Инициализация нового проекта:
+
+```bash
 uv init slidelab
 cd slidelab
+```
 
+## Создание виртуального окружения
+
+Создать и активировать виртуальное окружение:
+
+```bash
 uv venv
-.venv\Scripts\activate 
+.venv\Scripts\activate
+```
 
-uv add "mcp[cli]" 
-uv install "mcp[cli]"
+## Установка зависимостей
 
-new item server.py
+Установить MCP SDK:
 
+```bash
+uv add "mcp[cli]"
+```
+
+> Команда добавляет пакет в зависимости проекта и обновляет `pyproject.toml`.
+
+При необходимости установить зависимости вручную:
+
+```bash
+uv pip install "mcp[cli]"
+```
+
+## Создание MCP-сервера
+
+Создать файл:
+
+```text
+server.py
+```
+
+и реализовать в нем инструменты MCP.
+
+## Запуск MCP-сервера
+
+Запуск сервера через uv:
+
+```bash
 uv run --with mcp main_mcp.py
+```
 
+## Запуск MCP Inspector
 
+Инструмент для тестирования и отладки MCP-сервера:
+
+```bash
 npx -y @modelcontextprotocol/inspector
+```
 
+После запуска откройте интерфейс Inspector в браузере и подключитесь к серверу.
+
+## Запуск FastAPI
+
+Запуск HTTP API в режиме разработки:
+
+```bash
 uv run uvicorn main:app --reload
+```
+
+Параметр `--reload` автоматически перезапускает сервер при изменении исходного кода.
+
+## Остановка процессов uv
+
+Принудительное завершение всех процессов uv в Windows:
+
+```bash
 taskkill /F /IM uv.exe
+```
