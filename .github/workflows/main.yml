@@ -18,6 +18,6 @@ jobs:
           key: ${{ secrets.SERVER_DEPLOY_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
           script: |
-            whoami
-            hostname
-            pwd
+            cd /root/project/apps/mcp_ppt
+            git pull origin main
+            docker compose up -d --build
