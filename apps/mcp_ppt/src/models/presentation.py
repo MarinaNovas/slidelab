@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pptx import Presentation
-from typing import Any, Literal, Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, Field, model_validator
 
 @dataclass
@@ -9,12 +9,14 @@ class PresentationModel:
     title: str
     prs: Presentation
     template_name: str | None = None
+    template_profile: dict | None = None
 
 
 class PresentationMetadata(BaseModel):
     title: str
     subtitle: Optional[str] = None
     template_name: Optional[str] = None
+    template_url: Optional[str] = None
 
 
 class ImageSpec(BaseModel):
@@ -44,7 +46,32 @@ class ImageContentSlide(BaseSlide):
     section_title: Optional[str] = None
     subtitle: Optional[str] = None
     content: list[str] = Field(default_factory=list)
-    image: ImageSpec
+    image: Optional[ImageSpec] = None
+    # Optional layout variant.
+    # Currently only supported value: "diagram".
+    # If omitted, the default image_content layout is used.
+    variant:  Optional[str] = None
+
+    # Optional PlantUML source code.
+    # If provided, image.prompt is not required and the diagram is generated via uml_service.
+    plantuml_code: Optional[str] = None
+
+    @model_validator(mode = "after")
+    def validate_image_source(self):
+        if not self.image and not self.plantuml_code:
+            raise ValueError(
+                "image_content slide requires either image or plantuml_code"
+            )
+
+        if self.image and self.plantuml_code:
+            raise ValueError(
+                "image_content slide must contain only one image source: image or plantuml_code"
+            )
+
+        if self.plantuml_code and self.variant is None:
+            self.variant = "diagram"
+
+        return self
 
 
 class ComparisonTableSlide(BaseSlide):

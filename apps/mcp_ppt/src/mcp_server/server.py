@@ -4,15 +4,18 @@ from typing import Optional
 from typing_extensions import Any
 
 from src.api.app import EXPORTS_DIR
-from src.config import MEDIA_DIR, settings
+from src.config import DEFAULT_TEMPLATE, MEDIA_DIR, settings, TEMPLATES_DIR
 from src.models.presentation import PresentationPlan
 from src.models.slide import AgendaItemData, AgendaSlideData, ComparisonTableSlideData, ContentSlideData, \
     ImageSlideData, SectionSlideData, \
     TableSlideData, TitleSlideData
+from src.services.template_inspector import TemplateInspector
+from src.services.template_loader import TemplateLoader
 from src.services.presentation_creator import PresentationCreator
 from src.services.presentation_store import PresentationStore
 from src.services.slide_creator import SlideCreator
 from src.services.yandex_art_image_generator import YandexArtImageGenerator
+from src.services.plantuml_generator import PlantUMLImageGenerator
 
 # Create an MCP server
 mcp = FastMCP("PowerPoint Creator",  dependencies=["python-pptx","requests"], host="0.0.0.0", port=8001)
@@ -21,14 +24,21 @@ store = PresentationStore()
 presentation_service = PresentationCreator(store)
 slide_service = SlideCreator(store)
 image_service = YandexArtImageGenerator(**settings.YANDEX_ART_CONFIG)
+uml_service = PlantUMLImageGenerator(**settings.UML_CONFIG)
 print(settings.YANDEX_ART_CONFIG)
+print(settings.UML_CONFIG)
+
+MOCk_URL = "https://numira.obs.ru-moscow-1.hc.sbercloud.ru/numira/knowledge_sources_prod/files/632f98b5f1e47ac4b99656ed88c5a49ce13f78deeb3b8e030196ef3c79d72e58/template_axenix.pptx"
+
+template_loader = TemplateLoader(TEMPLATES_DIR)
+template_inspector = TemplateInspector()
 
 @mcp.tool()
 def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
     """
         Generate a complete PowerPoint presentation from one structured JSON payload.
 
-        Use this tool when the presentation plan is already prepared.
+        Use this tool when the full presentation plan is already prepared.
 
         IMPORTANT:
         - Do NOT call create_presentation manually.
@@ -41,19 +51,16 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         - Do NOT call add_comparison_table_slide manually.
         - Do NOT call add_thank_you_slide manually.
         - Do NOT call save_presentation manually.
+        - This tool performs the full workflow internally.
 
-        This tool performs the full workflow internally:
-        1. creates the presentation;
-        2. adds title slide;
-        3. adds agenda slide if agenda is provided;
-        4. adds section slides;
-        5. adds content slides;
-        6. generates images for image_content slides;
-        7. adds image_content slides;
-        8. adds comparison table slides;
-        9. adds final thank-you slide if add_thank_you=true;
-        10. saves presentation if save=true;
-        11. returns download_url.
+        Template rules:
+        - If the user uploaded or provided a PowerPoint template file, pass its public URL in metadata.template_url.
+        - If metadata.template_url is provided, the tool downloads the template, saves it into the local templates directory, inspects its layouts, and uses it for generation.
+        - If metadata.template_url is not provided, metadata.template_name may be used.
+        - If neither template_url nor template_name is provided, the default template is used.
+        - Only .pptx templates are supported.
+        - Do not pass local file paths in template_name.
+        - Do not call download_template separately when using this tool with metadata.template_url.
 
         Payload structure:
 
@@ -61,6 +68,7 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
           "metadata": {
             "title": "Presentation title",
             "subtitle": "Optional subtitle or short description",
+            "template_url": "https://example.com/templates/custom_template.pptx",
             "template_name": null
           },
           "agenda": [
@@ -125,10 +133,17 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         - every slide.type
         - every slide.title
 
-        Slide types:
+        Supported slide types:
+        - section
+        - content
+        - image_content
+        - comparison_table
+
+        Slide type rules:
 
         1. section
         Use for section divider slides.
+
         Required:
         - type = "section"
         - title
@@ -140,7 +155,8 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         }
 
         2. content
-        Use for normal text slides with bullet points.
+        Use for normal text slides with bullet points: ideas, conclusions, explanations, recommendations.
+
         Required:
         - type = "content"
         - title
@@ -163,29 +179,88 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         }
 
         3. image_content
-        Use for slides with generated image and bullet points.
+
+        Use for slides with visual content and bullet points.
+
         Required:
         - type = "image_content"
         - title
         - content
+
+        Image source:
+
+        image_content supports two image sources.
+
+        Option A: Generated image
+
+        Use "image" when the slide needs:
+        - business illustration
+        - conceptual visual
+        - photo-like visual
+        - infographic
+        - abstract visual explanation
+
+        Required:
         - image.prompt
 
         Optional:
-        - section_title
-        - subtitle
         - image.style
         - image.width_ratio
         - image.height_ratio
         - image.seed
 
-        Rules:
-        - Use this slide type for approximately 30–50% of main slides.
-        - The image prompt must describe the visual scene clearly.
-        - The image must support the slide content.
-        - Do not pass image_id manually.
-        - The tool generates the image internally.
+        Option B: PlantUML diagram
 
-        Example:
+        Use "plantuml_code" when the slide needs a precise technical diagram:
+
+        - architecture diagram
+        - component diagram
+        - sequence diagram
+        - workflow
+        - system interaction
+        - API flow
+
+        Required:
+        - plantuml_code
+
+        PlantUML rules:
+        - plantuml_code must be a valid PlantUML source.
+        - plantuml_code must contain both @startuml and @enduml.
+        - Do not wrap plantuml_code in markdown code fences.
+        - Use a normal JSON string.
+        - Newlines should be represented using \\n inside JSON.
+
+        Optional:
+        - section_title
+        - subtitle
+        - variant
+
+        variant:
+
+        Optional image_content layout variant.
+
+        Currently supported values:
+        - null
+        - "diagram"
+
+        Meaning:
+        - null      -> default image_content layout
+        - "diagram" -> diagram layout
+
+        Rules:
+        - Use variant="diagram" when using plantuml_code.
+        - Use variant="diagram" for architecture, workflow and technical diagrams.
+        - For all other image_content slides omit variant.
+
+        General rules:
+        - Use either image or plantuml_code, not both.
+        - The tool generates the image internally.
+        - Do not pass image_id manually.
+        - The visual content must support the slide content.
+        - Keep bullet points short.
+
+        Example 1: Generated image
+
         {
           "type": "image_content",
           "title": "AI-assisted Presentation Workflow",
@@ -205,8 +280,24 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
           }
         }
 
+        Example 2: PlantUML diagram
+
+        {
+          "type": "image_content",
+          "title": "MCP Presentation Pipeline",
+          "subtitle": "Template-based generation flow",
+          "variant": "diagram",
+          "content": [
+            "Template download",
+            "Template inspection",
+            "Slide generation"
+          ],
+          "plantuml_code": "@startuml\\nactor User\\ncomponent MCP\\ncomponent PowerPoint\\nUser --> MCP\\nMCP --> PowerPoint\\n@enduml"
+        }
+
         4. comparison_table
-        Use only for comparisons, metrics, structured data, KPIs, risks, features or scenarios.
+        Use only for comparisons, metrics, structured data, KPIs, risks, features, scenarios, or decision matrices.
+
         Required:
         - type = "comparison_table"
         - title
@@ -242,17 +333,15 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
 
         Global rules:
         - Start each major section with a section slide.
-        - After section slide, add 1–3 main slides.
-        - Use image_content for visual explanation.
-        - Use content for ideas, conclusions and explanations.
+        - After each section slide, add 1–3 main slides.
+        - Use image_content for visual explanations.
+        - Use content for ideas, conclusions, explanations and recommendations.
         - Use comparison_table only when table format is really needed.
-        - Keep all text short enough to fit on slides.
+        - Keep all slide text short enough to fit.
         - Do not include markdown in slide text.
         - Do not include HTML in slide text.
-        - Do not include speaker notes in this payload unless schema supports them.
+        - Do not include speaker notes.
         - Do not invent unsupported slide types.
-        - Supported slide types are only:
-          section, content, image_content, comparison_table.
 
         Returns:
         {
@@ -260,10 +349,11 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
           "prs_id": "...",
           "download_url": "...",
           "slides_count": 10,
+          "template_name": "...",
           "log": [...]
         }
 
-        On error returns:
+        On error:
         {
           "status": "error",
           "message": "Error description",
@@ -275,9 +365,24 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
     try:
         plan = PresentationPlan.model_validate(payload)
 
+        template_name = plan.metadata.template_name
+
+        if plan.metadata.template_url:
+            download_result = template_loader.download(plan.metadata.template_url)
+
+            if download_result.get("status") != "ok":
+                return {
+                    "status": "error",
+                    "message": "Failed to download template",
+                    "template_download": download_result,
+                    "log": log,
+                }
+            template_name = download_result["template_name"]
+            log.append(f"Downloaded template: {template_name}")
+
         prs_id = presentation_service.create(
             title=plan.metadata.title,
-            template_name=plan.metadata.template_name,
+            template_name=template_name,
         )
         log.append(f"Created presentation: {prs_id}")
 
@@ -329,13 +434,18 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
                 log.append(f"Added content slide: {slide_number}")
 
             elif slide.type == "image_content":
-                image_result = image_service.generate(
-                    prompt=slide.image.prompt,
-                    style=slide.image.style,
-                    width_ratio=slide.image.width_ratio,
-                    height_ratio=slide.image.height_ratio,
-                    seed=slide.image.seed,
-                )
+                if slide.plantuml_code:
+                    image_result = uml_service.generate(
+                        plantuml_code = slide.plantuml_code,
+                    )
+                else:
+                    image_result = image_service.generate(
+                        prompt = slide.image.prompt,
+                        style = slide.image.style,
+                        width_ratio = slide.image.width_ratio,
+                        height_ratio = slide.image.height_ratio,
+                        seed = slide.image.seed,
+                    )
 
                 if image_result.get("status") != "ok":
                     raise ValueError(
@@ -345,6 +455,12 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
                 image_id = image_result["image_id"]
                 image_path = MEDIA_DIR / f"{image_id}.jpeg"
 
+                if not image_path.exists():
+                    image_path = MEDIA_DIR / f"{image_id}.png"
+
+                if not image_path.exists():
+                    return f"Error: image '{image_id}' not found"
+
                 slide_number = slide_service.add_image_content_slide(
                     prs_id,
                     ImageSlideData(
@@ -353,6 +469,7 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
                         content=slide.content,
                         image_path=str(image_path),
                     ),
+                    variant=slide.variant,
                 )
 
                 log.append(
@@ -391,7 +508,7 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
             path = EXPORTS_DIR / file_name
             current_prs.prs.save(path)
 
-            download_url = f"{settings.PUBLIC_BASE_URL}/exports/{file_name}"
+            download_url = f"{settings.API_PUBLIC_BASE_URL}/exports/{file_name}"
             log.append(f"Saved presentation: {download_url}")
 
         return {
@@ -592,7 +709,7 @@ def save_presentation(prs_id: str) -> str:
     file_name = f"{prs_id}.pptx"
     path = EXPORTS_DIR / file_name
     current_prs.prs.save(path)
-    return f"Presentation saved. Download URL: {settings.PUBLIC_BASE_URL}/exports/{file_name}"
+    return f"Presentation saved. Download URL: {settings.API_PUBLIC_BASE_URL}/exports/{file_name}"
 
 @mcp.tool()
 def add_content_slide(
@@ -727,15 +844,89 @@ def add_image_content_slide(
     subtitle: str,
     content: list[str],
     image_id: str,
+    variant:str | None = None
 ) -> str:
     """
-    Add a slide with title, bullet points and previously generated image.
+    Add a slide with title, bullet points and a previously generated image.
 
-    Use this tool after generate_yandex_art_image.
-    Pass image_id returned by generate_yandex_art_image.
+    Use this tool after generate_yandex_art_image().
+    Pass image_id returned by generate_yandex_art_image().
+
+    The tool automatically selects an appropriate slide layout
+    from the template semantic profile.
+
+    Args:
+        prs_id:
+            Presentation identifier.
+
+        title:
+            Slide title.
+
+        subtitle:
+            Optional slide subtitle.
+
+        content:
+            List of short bullet points.
+
+        image_id:
+            Identifier returned by generate_yandex_art_image().
+
+        variant:
+            Optional layout variant inside the semantic type
+            "image_content".
+
+            Use this when the template contains multiple
+            image_content layouts.
+
+            Examples:
+            - None       -> default image_content layout
+            - "diagram"  -> diagram layout
+            - "process"  -> process diagram layout
+            - "timeline" -> timeline layout
+
+            Variant matching is performed against the layout name
+            discovered by TemplateInspector.
+
+    Examples:
+
+    Standard image slide:
+
+        add_image_content_slide(
+            prs_id="...",
+            title="AI Workflow",
+            subtitle="End-to-end process",
+            content=[
+                "Agent receives request",
+                "Presentation is generated",
+                "User downloads PPTX"
+            ],
+            image_id="abc123"
+        )
+
+    Diagram slide:
+
+        add_image_content_slide(
+            prs_id="...",
+            title="System Architecture",
+            subtitle="MCP Presentation Generator",
+            content=[
+                "Template download",
+                "Template inspection",
+                "Slide generation"
+            ],
+            image_id="abc123",
+            variant="diagram"
+        )
+
+    Returns:
+        Success message with slide position
+        or error description.
     """
     try:
         image_path = MEDIA_DIR / f"{image_id}.jpeg"
+
+        if not image_path.exists():
+            image_path = MEDIA_DIR / f"{image_id}.png"
 
         if not image_path.exists():
             return f"Error: image '{image_id}' not found"
@@ -746,7 +937,8 @@ def add_image_content_slide(
             title=title,
             subtitle=subtitle,
             content=content,
-            image_path=str(image_path))
+            image_path=str(image_path)),
+            variant
         )
 
         return f"Added image content slide at position {slide_number}"
@@ -871,6 +1063,47 @@ def add_agenda_slide(
         return f"Error adding agenda slide: {str(e)}"
 
 @mcp.tool()
+def generate_uml_diagram(
+    plantuml_code: str,
+) -> dict:
+    """
+    Generate uml diagram as image and save it locally.
+
+    Use this tool when a presentation needs a generated uml diagram such as:
+    sequence, class, use case, activity, component, state, deplyment, object or thinking.
+
+    Args:
+        plantuml_code: The PlantUML definition code.
+                       Example:
+                       @startuml
+                       Alice -> Bob : Hello
+                       @enduml.
+
+    Returns:
+        Dict with:
+        - status
+        - image_id
+        - image_path
+        - image_url
+
+    Workflow:
+        1. Call create_presentation
+        2. Call generate_uml_image
+        3. Pass returned image_id to add_image_content_slide
+        4. Call save_presentation
+    """
+    try:
+        return uml_service.generate(
+        plantuml_code=plantuml_code,
+        )
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+        }
+
+@mcp.tool()
 def add_thank_you_slide(
     prs_id: str,
 ) -> str:
@@ -901,3 +1134,63 @@ def add_thank_you_slide(
 
     except Exception as e:
         return f"Error adding thank-you slide: {str(e)}"
+
+@mcp.tool()
+def download_template(template_url: str) -> dict:
+    """
+    Download a PowerPoint template (.pptx) from a public URL and save it
+    into the local templates directory.
+
+    Use this tool when a user provides a PowerPoint template URL and the
+    template must be used for presentation generation.
+
+    Typical workflow:
+    1. User uploads a .pptx template.
+    2. Agent receives a public URL for the uploaded file.
+    3. Call download_template(template_url).
+    4. Use returned template_name in inspect_template().
+    5. Use returned template_name in generate_presentation_from_json().
+
+    Args:
+        template_url:
+            Public URL pointing to a PowerPoint template (.pptx).
+
+            Example:
+            https://example.com/templates/template_axenix.pptx
+
+    Returns:
+        {
+            "status": "ok",
+            "template_name": "template_axenix_20260607_ab12cd34.pptx",
+            "original_file_name": "template_axenix.pptx",
+            "template_path": "/app/templates/template_axenix_20260607_ab12cd34.pptx",
+            "size_bytes": 123456,
+            "source_url": "https://...",
+            "content_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        }
+
+    Error example:
+        {
+            "status": "error",
+            "message": "...",
+            "source_url": "https://..."
+        }
+
+    Important:
+    - Only PowerPoint (.pptx) templates are supported.
+    - The downloaded template is stored in the local templates directory.
+    - A unique template name is generated automatically.
+    - The returned template_name should be used in subsequent MCP tools.
+    - Call inspect_template() after downloading if the template structure
+      needs to be analyzed.
+    """
+    return template_loader.download(template_url)
+
+@mcp.tool()
+def inspect_template(template_name: str = "template_axenix.pptx") -> dict:
+    """
+        Inspect a PowerPoint template and return technical + semantic layout profile.
+    """
+    template_path = DEFAULT_TEMPLATE if not template_name else TEMPLATES_DIR / template_name
+    zzz = TemplateInspector.inspect(template_path)
+    return zzz

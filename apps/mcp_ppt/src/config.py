@@ -7,6 +7,7 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 DEFAULT_TEMPLATE = TEMPLATES_DIR / "template_axenix.pptx"
 MEDIA_DIR = BASE_DIR / "media"
 
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file = BASE_DIR / ".env",
@@ -19,6 +20,8 @@ class Settings(BaseSettings):
     YANDEX_API_KEY: str
     YANDEX_FOLDER_ID: str
     PUBLIC_BASE_URL: str
+    API_PUBLIC_BASE_URL: str
+    PLANTUML_SERVER_URL: str
 
     @property
     def MCP_PPT_URL(self):
@@ -31,6 +34,14 @@ class Settings(BaseSettings):
         "auth": self.YANDEX_API_KEY,
         "images_dir": MEDIA_DIR,
         "public_base_url": self.PUBLIC_BASE_URL,
+        }
+
+    @property
+    def UML_CONFIG(self):
+        return {
+            "plantuml_server_url": settings.PLANTUML_SERVER_URL,
+            "images_dir": MEDIA_DIR,
+            "public_base_url": self.PUBLIC_BASE_URL,
         }
 
 settings = Settings()

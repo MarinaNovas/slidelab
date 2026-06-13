@@ -7,6 +7,7 @@ from pptx import Presentation
 from src.config import DEFAULT_TEMPLATE, TEMPLATES_DIR
 from src.models.presentation import PresentationModel
 from src.services.presentation_store import PresentationStore
+from src.services.template_inspector import TemplateInspector
 
 class PresentationCreator:
     def __init__(self, store: PresentationStore) -> None:
@@ -19,10 +20,12 @@ class PresentationCreator:
             prs = Presentation(str(template_path))
         else:
             prs = Presentation()
+        template_profile = TemplateInspector.inspect(template_path).get("semantic_profile")
         presentation = PresentationModel(
             id = prs_id,
             title = title,
             prs = prs,
+            template_profile = template_profile
         )
         self.store.add(presentation)
         return prs_id
