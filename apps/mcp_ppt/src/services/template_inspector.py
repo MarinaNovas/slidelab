@@ -17,9 +17,7 @@ class TemplateInspector:
         layouts = []
 
         for master_index, master in enumerate(prs.slide_masters):
-            print(f"\nMASTER {master_index}")
             for layout_index, layout in enumerate(master.slide_layouts):
-                print(f"{layout_index} {layout.name}")
                 placeholders = TemplateInspector._inspect_placeholders(layout)
                 semantic_type = TemplateInspector._guess_layout_semantic_type(
                     layout_name = layout.name,
@@ -133,7 +131,6 @@ class TemplateInspector:
         body_count = types.count("BODY")
         object_count = types.count("OBJECT")
         picture_count = types.count("PICTURE")
-        print(f"{name=}" )
         if "agenda" in name:
             return "agenda"
 
@@ -170,7 +167,6 @@ class TemplateInspector:
         for shape in layout.placeholders:
             ph_format = shape.placeholder_format
             ph_type = ph_format.type
-            print(f"{ph_format.type}")
 
             placeholders.append({
                 "idx": ph_format.idx,
