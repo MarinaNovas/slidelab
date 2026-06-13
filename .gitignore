@@ -5,7 +5,5 @@
 README-LOCK.md
 __pycache__/
 *.py[cod]
-media/*
-!media/.gitkeep
-exports/*
-!exports/.gitkeep
+apps/mcp_ppt/exports/
+apps/mcp_ppt/media/
