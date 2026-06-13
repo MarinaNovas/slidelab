@@ -4,11 +4,13 @@ from typing import Optional
 from typing_extensions import Any
 
 from src.api.app import EXPORTS_DIR
-from src.config import MEDIA_DIR, settings
+from src.config import DEFAULT_TEMPLATE, MEDIA_DIR, settings, TEMPLATES_DIR
 from src.models.presentation import PresentationPlan
 from src.models.slide import AgendaItemData, AgendaSlideData, ComparisonTableSlideData, ContentSlideData, \
     ImageSlideData, SectionSlideData, \
     TableSlideData, TitleSlideData
+from src.services.template_inspector import TemplateInspector
+from src.services.template_loader import TemplateLoader
 from src.services.presentation_creator import PresentationCreator
 from src.services.presentation_store import PresentationStore
 from src.services.slide_creator import SlideCreator
@@ -23,12 +25,17 @@ slide_service = SlideCreator(store)
 image_service = YandexArtImageGenerator(**settings.YANDEX_ART_CONFIG)
 print(settings.YANDEX_ART_CONFIG)
 
+MOCk_URL = "https://numira.obs.ru-moscow-1.hc.sbercloud.ru/numira/knowledge_sources_prod/files/632f98b5f1e47ac4b99656ed88c5a49ce13f78deeb3b8e030196ef3c79d72e58/template_axenix.pptx"
+
+template_loader = TemplateLoader(TEMPLATES_DIR)
+template_inspector = TemplateInspector()
+
 @mcp.tool()
 def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
     """
         Generate a complete PowerPoint presentation from one structured JSON payload.
 
-        Use this tool when the presentation plan is already prepared.
+        Use this tool when the full presentation plan is already prepared.
 
         IMPORTANT:
         - Do NOT call create_presentation manually.
@@ -41,19 +48,16 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         - Do NOT call add_comparison_table_slide manually.
         - Do NOT call add_thank_you_slide manually.
         - Do NOT call save_presentation manually.
+        - This tool performs the full workflow internally.
 
-        This tool performs the full workflow internally:
-        1. creates the presentation;
-        2. adds title slide;
-        3. adds agenda slide if agenda is provided;
-        4. adds section slides;
-        5. adds content slides;
-        6. generates images for image_content slides;
-        7. adds image_content slides;
-        8. adds comparison table slides;
-        9. adds final thank-you slide if add_thank_you=true;
-        10. saves presentation if save=true;
-        11. returns download_url.
+        Template rules:
+        - If the user uploaded or provided a PowerPoint template file, pass its public URL in metadata.template_url.
+        - If metadata.template_url is provided, the tool downloads the template, saves it into the local templates directory, inspects its layouts, and uses it for generation.
+        - If metadata.template_url is not provided, metadata.template_name may be used.
+        - If neither template_url nor template_name is provided, the default template is used.
+        - Only .pptx templates are supported.
+        - Do not pass local file paths in template_name.
+        - Do not call download_template separately when using this tool with metadata.template_url.
 
         Payload structure:
 
@@ -61,6 +65,7 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
           "metadata": {
             "title": "Presentation title",
             "subtitle": "Optional subtitle or short description",
+            "template_url": "https://example.com/templates/custom_template.pptx",
             "template_name": null
           },
           "agenda": [
@@ -125,10 +130,17 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         - every slide.type
         - every slide.title
 
-        Slide types:
+        Supported slide types:
+        - section
+        - content
+        - image_content
+        - comparison_table
+
+        Slide type rules:
 
         1. section
         Use for section divider slides.
+
         Required:
         - type = "section"
         - title
@@ -140,7 +152,8 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         }
 
         2. content
-        Use for normal text slides with bullet points.
+        Use for normal text slides with bullet points: ideas, conclusions, explanations, recommendations.
+
         Required:
         - type = "content"
         - title
@@ -163,7 +176,8 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         }
 
         3. image_content
-        Use for slides with generated image and bullet points.
+        Use for slides with a generated image and bullet points.
+
         Required:
         - type = "image_content"
         - title
@@ -179,7 +193,7 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         - image.seed
 
         Rules:
-        - Use this slide type for approximately 30–50% of main slides.
+        - Use this slide type for visual explanation.
         - The image prompt must describe the visual scene clearly.
         - The image must support the slide content.
         - Do not pass image_id manually.
@@ -206,7 +220,8 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         }
 
         4. comparison_table
-        Use only for comparisons, metrics, structured data, KPIs, risks, features or scenarios.
+        Use only for comparisons, metrics, structured data, KPIs, risks, features, scenarios, or decision matrices.
+
         Required:
         - type = "comparison_table"
         - title
@@ -242,17 +257,15 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
 
         Global rules:
         - Start each major section with a section slide.
-        - After section slide, add 1–3 main slides.
-        - Use image_content for visual explanation.
-        - Use content for ideas, conclusions and explanations.
+        - After each section slide, add 1–3 main slides.
+        - Use image_content for visual explanations.
+        - Use content for ideas, conclusions, explanations and recommendations.
         - Use comparison_table only when table format is really needed.
-        - Keep all text short enough to fit on slides.
+        - Keep all slide text short enough to fit.
         - Do not include markdown in slide text.
         - Do not include HTML in slide text.
-        - Do not include speaker notes in this payload unless schema supports them.
+        - Do not include speaker notes.
         - Do not invent unsupported slide types.
-        - Supported slide types are only:
-          section, content, image_content, comparison_table.
 
         Returns:
         {
@@ -260,10 +273,11 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
           "prs_id": "...",
           "download_url": "...",
           "slides_count": 10,
+          "template_name": "...",
           "log": [...]
         }
 
-        On error returns:
+        On error:
         {
           "status": "error",
           "message": "Error description",
@@ -275,9 +289,24 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
     try:
         plan = PresentationPlan.model_validate(payload)
 
+        template_name = plan.metadata.template_name
+
+        if plan.metadata.template_url:
+            download_result = template_loader.download(plan.metadata.template_url)
+
+            if download_result.get("status") != "ok":
+                return {
+                    "status": "error",
+                    "message": "Failed to download template",
+                    "template_download": download_result,
+                    "log": log,
+                }
+            template_name = download_result["template_name"]
+            log.append(f"Downloaded template: {template_name}")
+
         prs_id = presentation_service.create(
             title=plan.metadata.title,
-            template_name=plan.metadata.template_name,
+            template_name=template_name,
         )
         log.append(f"Created presentation: {prs_id}")
 
@@ -391,7 +420,7 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
             path = EXPORTS_DIR / file_name
             current_prs.prs.save(path)
 
-            download_url = f"{settings.PUBLIC_BASE_URL}/exports/{file_name}"
+            download_url = f"{settings.API_PUBLIC_BASE_URL}/exports/{file_name}"
             log.append(f"Saved presentation: {download_url}")
 
         return {
@@ -592,7 +621,7 @@ def save_presentation(prs_id: str) -> str:
     file_name = f"{prs_id}.pptx"
     path = EXPORTS_DIR / file_name
     current_prs.prs.save(path)
-    return f"Presentation saved. Download URL: {settings.PUBLIC_BASE_URL}/exports/{file_name}"
+    return f"Presentation saved. Download URL: {settings.API_PUBLIC_BASE_URL}/exports/{file_name}"
 
 @mcp.tool()
 def add_content_slide(
@@ -901,3 +930,63 @@ def add_thank_you_slide(
 
     except Exception as e:
         return f"Error adding thank-you slide: {str(e)}"
+
+@mcp.tool()
+def download_template(template_url: str) -> dict:
+    """
+    Download a PowerPoint template (.pptx) from a public URL and save it
+    into the local templates directory.
+
+    Use this tool when a user provides a PowerPoint template URL and the
+    template must be used for presentation generation.
+
+    Typical workflow:
+    1. User uploads a .pptx template.
+    2. Agent receives a public URL for the uploaded file.
+    3. Call download_template(template_url).
+    4. Use returned template_name in inspect_template().
+    5. Use returned template_name in generate_presentation_from_json().
+
+    Args:
+        template_url:
+            Public URL pointing to a PowerPoint template (.pptx).
+
+            Example:
+            https://example.com/templates/template_axenix.pptx
+
+    Returns:
+        {
+            "status": "ok",
+            "template_name": "template_axenix_20260607_ab12cd34.pptx",
+            "original_file_name": "template_axenix.pptx",
+            "template_path": "/app/templates/template_axenix_20260607_ab12cd34.pptx",
+            "size_bytes": 123456,
+            "source_url": "https://...",
+            "content_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        }
+
+    Error example:
+        {
+            "status": "error",
+            "message": "...",
+            "source_url": "https://..."
+        }
+
+    Important:
+    - Only PowerPoint (.pptx) templates are supported.
+    - The downloaded template is stored in the local templates directory.
+    - A unique template name is generated automatically.
+    - The returned template_name should be used in subsequent MCP tools.
+    - Call inspect_template() after downloading if the template structure
+      needs to be analyzed.
+    """
+    return template_loader.download(template_url)
+
+@mcp.tool()
+def inspect_template(template_name: str = "template_axenix.pptx") -> dict:
+    """
+        Inspect a PowerPoint template and return technical + semantic layout profile.
+    """
+    template_path = DEFAULT_TEMPLATE if not template_name else TEMPLATES_DIR / template_name
+    zzz = TemplateInspector.inspect(template_path)
+    return zzz

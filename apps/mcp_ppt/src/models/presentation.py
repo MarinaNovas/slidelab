@@ -9,12 +9,14 @@ class PresentationModel:
     title: str
     prs: Presentation
     template_name: str | None = None
+    template_profile: dict | None = None
 
 
 class PresentationMetadata(BaseModel):
     title: str
     subtitle: Optional[str] = None
     template_name: Optional[str] = None
+    template_url: Optional[str] = None
 
 
 class ImageSpec(BaseModel):

@@ -5,3 +5,7 @@
 README-LOCK.md
 __pycache__/
 *.py[cod]
+media/*
+!media/.gitkeep
+exports/*
+!exports/.gitkeep

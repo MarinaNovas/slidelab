@@ -18,24 +18,40 @@ class SlideCreator:
     def __init__(self, store: PresentationStore) -> None:
         self.store = store
 
+    @staticmethod
+    def _add_semantic_slide(presentation, semantic_type: str):
+        profile = presentation.template_profile
+        if not profile or semantic_type not in profile:
+            raise ValueError(f"Layout '{semantic_type}' not found in template profile")
+        layout_info = profile[semantic_type][0]
+        prs = presentation.prs
+        master = prs.slide_masters[layout_info["master_index"]]
+        layout = master.slide_layouts[layout_info["layout_index"]]
+        slide = prs.slides.add_slide(layout)
+        return slide, layout_info["placeholders"]
+
     def add_title_slide(self, prs_id: str, data: TitleSlideData) -> int:
         presentation = self.store.get(prs_id)
         prs = presentation.prs
 
-        master = prs.slide_masters[0]
-        slide = prs.slides.add_slide(master.slide_layouts[0])
-        title_ph = self._get_placeholder(slide, 0)
-        body_1_ph = self._get_placeholder(slide, 14)
-        body_2_ph = self._get_placeholder(slide, 15)
+        slide, ph = SlideCreator._add_semantic_slide(
+            presentation = presentation,
+            semantic_type = "cover",
+        )
+        subtitle_idx = ph.get("subtitle") or ph.get("body") or ph.get("left-body")
+        if subtitle_idx is not None and data.subtitle:
+            subtitle_ph = self._get_placeholder(slide, subtitle_idx)
+            subtitle_ph.text = data.subtitle
 
+        title_ph = self._get_placeholder(slide, ph["title"])
         title_ph.text = data.title
-        if data.subtitle:
-            body_1_ph.text = data.subtitle
-        body_2_ph.text = str(date.today())
-        #slide.shapes.title.text = data.title
 
-        #if data.subtitle and len(slide.placeholders) > 1:
-        #    slide.placeholders[1].text = data.subtitle
+        # если в шаблоне есть второй BODY — используем его под дату
+        date_idx = ph.get("second_body") or ph.get("date") or ph.get("right_body")
+
+        if date_idx is not None:
+            date_ph = self._get_placeholder(slide, date_idx)
+            date_ph.text = str(date.today())
 
         return len(prs.slides)
 
@@ -43,15 +59,18 @@ class SlideCreator:
         presentation = self.store.get(prs_id)
         prs = presentation.prs
 
-        master = prs.slide_masters[1]
-        slide = prs.slides.add_slide(master.slide_layouts[0])
+        slide, ph = SlideCreator._add_semantic_slide(
+            presentation = presentation,
+            semantic_type = "content",
+        )
 
-        title_ph = self._get_placeholder(slide, 0)
-        body_1_ph = self._get_placeholder(slide, 14)
+        title_ph = self._get_placeholder(slide, ph["title"])
+
+        content_idx = ph.get("content") or ph.get("body")
+        body_ph = self._get_placeholder(slide, content_idx)
 
         title_ph.text = data.title
-        body_1_ph.text = "\n".join(data.content)
-
+        body_ph.text = "\n".join(data.content)
 
         return len(prs.slides)
 
@@ -59,16 +78,19 @@ class SlideCreator:
         presentation = self.store.get(prs_id)
         prs = presentation.prs
 
-        master = prs.slide_masters[2]
-        slide = prs.slides.add_slide(master.slide_layouts[4])
+        slide, ph = SlideCreator._add_semantic_slide(
+            presentation = presentation,
+            semantic_type = "image_content"
+        )
 
-        title_ph = self._get_placeholder(slide, 0)
-        body_ph = self._get_placeholder(slide, 10)
-        object_ph = self._get_placeholder(slide, 2)
-        picture_ph = self._get_placeholder(slide, 13)
+        title_ph = self._get_placeholder(slide, ph["title"])
+        body_ph = self._get_placeholder(slide, ph["body"])
+        object_ph = self._get_placeholder(slide, ph["content"])
+        picture_ph = self._get_placeholder(slide, ph["image"])
 
         title_ph.text = data.title
-        body_ph.text = data.subtitle
+        body_ph.text = data.subtitle or ""
+
         print(f"{data.content}=")
         tf = object_ph.text_frame
         tf.clear()  # очищаем дефолтный текст
@@ -96,11 +118,11 @@ class SlideCreator:
         presentation = self.store.get(prs_id)
         prs = presentation.prs
 
-        master = prs.slide_masters[3]
-        slide = prs.slides.add_slide(master.slide_layouts[1])
-
-        title_ph = self._get_placeholder(slide, 0)
-
+        slide, ph = SlideCreator._add_semantic_slide(
+            presentation = presentation,
+            semantic_type = "section",
+        )
+        title_ph = self._get_placeholder(slide, ph["title"])
         title_ph.text = data.section_title
 
         return len(prs.slides)
@@ -150,9 +172,10 @@ class SlideCreator:
             raise ValueError(f"Presentation '{prs_id}' not found")
 
         prs = presentation.prs
-
-        master = prs.slide_masters[4]
-        slide = prs.slides.add_slide(master.slide_layouts[0])
+        slide, _ = SlideCreator._add_semantic_slide(
+            presentation = presentation,
+            semantic_type = "thank_you",
+        )
         return len(prs.slides)
 
     def add_agenda_slide(self, prs_id: str, data: AgendaSlideData) -> int:
@@ -163,10 +186,17 @@ class SlideCreator:
 
         prs = presentation.prs
 
-        master = prs.slide_masters[0]
-        slide = prs.slides.add_slide(master.slide_layouts[1])
+        slide, ph = SlideCreator._add_semantic_slide(
+            presentation = presentation,
+            semantic_type = "agenda",
+        )
 
-        title_ph = self._get_placeholder(slide, 10)
+        title_idx = ph.get("title") or ph.get("body")
+
+        if title_idx is None:
+            raise ValueError("Title placeholder not found for semantic layout 'agenda'")
+
+        title_ph = self._get_placeholder(slide, title_idx)
         title_ph.text = data.title or "AGENDA"
 
         number_placeholder_ids = [44, 45, 46, 34, 35, 36]
@@ -192,20 +222,36 @@ class SlideCreator:
             raise ValueError(f"Presentation '{prs_id}' not found")
 
         prs = presentation.prs
+        slide, ph = SlideCreator._add_semantic_slide(
+            presentation = presentation,
+            semantic_type = "comparison",
+        )
 
-        # MASTER 0, layout 8: 2_Comparison
-        master = prs.slide_masters[2]
-        slide = prs.slides.add_slide(master.slide_layouts[8])
+        title_ph = self._get_placeholder(slide, ph["title"])
+        title_ph.text = data.title or ""
 
-        table_title_ph = self._get_placeholder(slide, 1)
-        sidebar_ph = self._get_placeholder(slide, 10)
-        title_ph = self._get_placeholder(slide, 0)
-        object_ph = self._get_placeholder(slide, 2)
+        table_title_idx = ph.get("body")
+        sidebar_idx = ph.get("left_body")
+        object_idx = ph.get("content")
 
         title_ph.text = data.title or ""
-        table_title_ph.text = data.table_title or ""
 
-        sidebar_ph.text = "\n".join(str(item) for item in data.sidebar_items if item is not None)
+        if table_title_idx is not None:
+            table_title_ph = self._get_placeholder(slide, table_title_idx)
+            table_title_ph.text = data.table_title or ""
+
+        if sidebar_idx is not None:
+            sidebar_ph = self._get_placeholder(slide, sidebar_idx)
+            sidebar_ph.text = "\n".join(
+                str(item)
+                for item in data.sidebar_items
+                if item is not None
+            )
+
+        if object_idx is None:
+            raise ValueError("Table placeholder not found for semantic layout 'comparison'")
+
+        object_ph = self._get_placeholder(slide, object_idx)
 
         rows_count = len(data.rows) + 1
         cols_count = len(data.headers)
