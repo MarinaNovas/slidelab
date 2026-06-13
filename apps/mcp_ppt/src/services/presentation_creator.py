@@ -21,8 +21,6 @@ class PresentationCreator:
         else:
             prs = Presentation()
         template_profile = TemplateInspector.inspect(template_path).get("semantic_profile")
-        print(template_profile.keys())
-        print(template_profile)
         presentation = PresentationModel(
             id = prs_id,
             title = title,
