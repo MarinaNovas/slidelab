@@ -1,9 +1,11 @@
 from datetime import date
 from pathlib import Path
+from PIL import Image
 
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN
 from pptx.dml.color import RGBColor
+
 
 from src.models.slide import (
     AgendaSlideData, ComparisonTableSlideData, ImageSlideData, TitleSlideData,
@@ -19,16 +21,69 @@ class SlideCreator:
         self.store = store
 
     @staticmethod
-    def _add_semantic_slide(presentation, semantic_type: str):
+    def _add_semantic_slide(presentation, semantic_type: str, variant: str | None = None,):
         profile = presentation.template_profile
         if not profile or semantic_type not in profile:
             raise ValueError(f"Layout '{semantic_type}' not found in template profile")
-        layout_info = profile[semantic_type][0]
+        layouts = profile[semantic_type]
+
+        layout_info = SlideCreator._select_layout_variant(
+            layouts = layouts,
+            variant = variant,
+        )
         prs = presentation.prs
         master = prs.slide_masters[layout_info["master_index"]]
         layout = master.slide_layouts[layout_info["layout_index"]]
         slide = prs.slides.add_slide(layout)
         return slide, layout_info["placeholders"]
+
+    @staticmethod
+    def _select_layout_variant(
+            layouts: list[dict],
+            variant: str | None = None,
+    ) -> dict:
+        if not layouts:
+            raise ValueError("No layouts found")
+
+        if not variant:
+            return layouts[0]
+
+        variant = variant.lower()
+
+        for layout in layouts:
+            layout_name = layout["layout_name"].lower()
+
+            if variant in layout_name:
+                return layout
+
+        raise ValueError(
+            f"Layout variant '{variant}' not found. "
+            f"Available variants: {[layout['layout_name'] for layout in layouts]}"
+        )
+
+    @staticmethod
+    def _insert_image_fit(slide, image_path: str, placeholder) -> None:
+        with Image.open(image_path) as img:
+            img_width, img_height = img.size
+
+        box_width = placeholder.width
+        box_height = placeholder.height
+
+        scale = min(box_width / img_width, box_height / img_height)
+
+        new_width = int(img_width * scale)
+        new_height = int(img_height * scale)
+
+        left = placeholder.left + int((box_width - new_width) / 2)
+        top = placeholder.top + int((box_height - new_height) / 2)
+
+        slide.shapes.add_picture(
+            image_path,
+            left,
+            top,
+            width = new_width,
+            height = new_height,
+        )
 
     def add_title_slide(self, prs_id: str, data: TitleSlideData) -> int:
         presentation = self.store.get(prs_id)
@@ -74,35 +129,35 @@ class SlideCreator:
 
         return len(prs.slides)
 
-    def add_image_content_slide(self, prs_id: str, data: ImageSlideData) -> int:
+    def add_image_content_slide(self, prs_id: str, data: ImageSlideData, variant: str | None = None,) -> int:
         presentation = self.store.get(prs_id)
         prs = presentation.prs
 
         slide, ph = SlideCreator._add_semantic_slide(
             presentation = presentation,
-            semantic_type = "image_content"
+            semantic_type = "image_content",
+            variant = variant
         )
 
         title_ph = self._get_placeholder(slide, ph["title"])
         body_ph = self._get_placeholder(slide, ph["body"])
-        object_ph = self._get_placeholder(slide, ph["content"])
+        content_idx = ph.get("content")
+        if content_idx is not None:
+            object_ph = self._get_placeholder(slide, content_idx)
+
+            tf = object_ph.text_frame
+            tf.clear()
+
+            for i, item in enumerate(data.content):
+                p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+                p.text = item
+                p.level = 0
+
         picture_ph = self._get_placeholder(slide, ph["image"])
 
         title_ph.text = data.title
         body_ph.text = data.subtitle or ""
 
-        print(f"{data.content}=")
-        tf = object_ph.text_frame
-        tf.clear()  # очищаем дефолтный текст
-
-        for i, item in enumerate(data.content):
-            if i == 0:
-                p = tf.paragraphs[0]
-            else:
-                p = tf.add_paragraph()
-
-            p.text = item
-            p.level = 0  # уровень bullet (0 = основной)
 
         if data.image_path:
             image_path = Path(data.image_path) #2bf37c60d1ae44c6b9f495035cc40eb0
@@ -110,7 +165,10 @@ class SlideCreator:
             if not image_path.exists():
                 raise ValueError(f"Image not found: {image_path}")
 
-            picture_ph.insert_picture(str(image_path))
+            if variant == "diagram":
+                SlideCreator._insert_image_fit(slide, str(image_path), picture_ph)
+            else:
+                picture_ph.insert_picture(str(image_path))
 
         return len(prs.slides)
 
@@ -200,7 +258,7 @@ class SlideCreator:
         title_ph.text = data.title or "AGENDA"
 
         number_placeholder_ids = [44, 45, 46, 34, 35, 36]
-        title_placeholder_ids = [59, 60, 56, 54, 55, 61]
+        title_placeholder_ids = [54, 55, 56, 59, 60, 61]
 
         for i, item in enumerate(data.items[:6]):
             number_ph = self._get_placeholder(slide, number_placeholder_ids[i])

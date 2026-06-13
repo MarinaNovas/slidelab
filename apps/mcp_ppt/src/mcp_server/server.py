@@ -179,30 +179,88 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         }
 
         3. image_content
-        Use for slides with a generated image and bullet points.
+
+        Use for slides with visual content and bullet points.
 
         Required:
         - type = "image_content"
         - title
         - content
+
+        Image source:
+
+        image_content supports two image sources.
+
+        Option A: Generated image
+
+        Use "image" when the slide needs:
+        - business illustration
+        - conceptual visual
+        - photo-like visual
+        - infographic
+        - abstract visual explanation
+
+        Required:
         - image.prompt
 
         Optional:
-        - section_title
-        - subtitle
         - image.style
         - image.width_ratio
         - image.height_ratio
         - image.seed
 
-        Rules:
-        - Use this slide type for visual explanation.
-        - The image prompt must describe the visual scene clearly.
-        - The image must support the slide content.
-        - Do not pass image_id manually.
-        - The tool generates the image internally.
+        Option B: PlantUML diagram
 
-        Example:
+        Use "plantuml_code" when the slide needs a precise technical diagram:
+
+        - architecture diagram
+        - component diagram
+        - sequence diagram
+        - workflow
+        - system interaction
+        - API flow
+
+        Required:
+        - plantuml_code
+
+        PlantUML rules:
+        - plantuml_code must be a valid PlantUML source.
+        - plantuml_code must contain both @startuml and @enduml.
+        - Do not wrap plantuml_code in markdown code fences.
+        - Use a normal JSON string.
+        - Newlines should be represented using \\n inside JSON.
+
+        Optional:
+        - section_title
+        - subtitle
+        - variant
+
+        variant:
+
+        Optional image_content layout variant.
+
+        Currently supported values:
+        - null
+        - "diagram"
+
+        Meaning:
+        - null      -> default image_content layout
+        - "diagram" -> diagram layout
+
+        Rules:
+        - Use variant="diagram" when using plantuml_code.
+        - Use variant="diagram" for architecture, workflow and technical diagrams.
+        - For all other image_content slides omit variant.
+
+        General rules:
+        - Use either image or plantuml_code, not both.
+        - The tool generates the image internally.
+        - Do not pass image_id manually.
+        - The visual content must support the slide content.
+        - Keep bullet points short.
+
+        Example 1: Generated image
+
         {
           "type": "image_content",
           "title": "AI-assisted Presentation Workflow",
@@ -220,6 +278,21 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
             "height_ratio": 1,
             "seed": null
           }
+        }
+
+        Example 2: PlantUML diagram
+
+        {
+          "type": "image_content",
+          "title": "MCP Presentation Pipeline",
+          "subtitle": "Template-based generation flow",
+          "variant": "diagram",
+          "content": [
+            "Template download",
+            "Template inspection",
+            "Slide generation"
+          ],
+          "plantuml_code": "@startuml\\nactor User\\ncomponent MCP\\ncomponent PowerPoint\\nUser --> MCP\\nMCP --> PowerPoint\\n@enduml"
         }
 
         4. comparison_table
@@ -361,13 +434,18 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
                 log.append(f"Added content slide: {slide_number}")
 
             elif slide.type == "image_content":
-                image_result = image_service.generate(
-                    prompt=slide.image.prompt,
-                    style=slide.image.style,
-                    width_ratio=slide.image.width_ratio,
-                    height_ratio=slide.image.height_ratio,
-                    seed=slide.image.seed,
-                )
+                if slide.plantuml_code:
+                    image_result = uml_service.generate(
+                        plantuml_code = slide.plantuml_code,
+                    )
+                else:
+                    image_result = image_service.generate(
+                        prompt = slide.image.prompt,
+                        style = slide.image.style,
+                        width_ratio = slide.image.width_ratio,
+                        height_ratio = slide.image.height_ratio,
+                        seed = slide.image.seed,
+                    )
 
                 if image_result.get("status") != "ok":
                     raise ValueError(
@@ -377,6 +455,12 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
                 image_id = image_result["image_id"]
                 image_path = MEDIA_DIR / f"{image_id}.jpeg"
 
+                if not image_path.exists():
+                    image_path = MEDIA_DIR / f"{image_id}.png"
+
+                if not image_path.exists():
+                    return f"Error: image '{image_id}' not found"
+
                 slide_number = slide_service.add_image_content_slide(
                     prs_id,
                     ImageSlideData(
@@ -385,6 +469,7 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
                         content=slide.content,
                         image_path=str(image_path),
                     ),
+                    variant=slide.variant,
                 )
 
                 log.append(
@@ -759,12 +844,83 @@ def add_image_content_slide(
     subtitle: str,
     content: list[str],
     image_id: str,
+    variant:str | None = None
 ) -> str:
     """
-    Add a slide with title, bullet points and previously generated image.
+    Add a slide with title, bullet points and a previously generated image.
 
-    Use this tool after generate_yandex_art_image.
-    Pass image_id returned by generate_yandex_art_image.
+    Use this tool after generate_yandex_art_image().
+    Pass image_id returned by generate_yandex_art_image().
+
+    The tool automatically selects an appropriate slide layout
+    from the template semantic profile.
+
+    Args:
+        prs_id:
+            Presentation identifier.
+
+        title:
+            Slide title.
+
+        subtitle:
+            Optional slide subtitle.
+
+        content:
+            List of short bullet points.
+
+        image_id:
+            Identifier returned by generate_yandex_art_image().
+
+        variant:
+            Optional layout variant inside the semantic type
+            "image_content".
+
+            Use this when the template contains multiple
+            image_content layouts.
+
+            Examples:
+            - None       -> default image_content layout
+            - "diagram"  -> diagram layout
+            - "process"  -> process diagram layout
+            - "timeline" -> timeline layout
+
+            Variant matching is performed against the layout name
+            discovered by TemplateInspector.
+
+    Examples:
+
+    Standard image slide:
+
+        add_image_content_slide(
+            prs_id="...",
+            title="AI Workflow",
+            subtitle="End-to-end process",
+            content=[
+                "Agent receives request",
+                "Presentation is generated",
+                "User downloads PPTX"
+            ],
+            image_id="abc123"
+        )
+
+    Diagram slide:
+
+        add_image_content_slide(
+            prs_id="...",
+            title="System Architecture",
+            subtitle="MCP Presentation Generator",
+            content=[
+                "Template download",
+                "Template inspection",
+                "Slide generation"
+            ],
+            image_id="abc123",
+            variant="diagram"
+        )
+
+    Returns:
+        Success message with slide position
+        or error description.
     """
     try:
         image_path = MEDIA_DIR / f"{image_id}.jpeg"
@@ -781,7 +937,8 @@ def add_image_content_slide(
             title=title,
             subtitle=subtitle,
             content=content,
-            image_path=str(image_path))
+            image_path=str(image_path)),
+            variant
         )
 
         return f"Added image content slide at position {slide_number}"

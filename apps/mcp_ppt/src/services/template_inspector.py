@@ -140,6 +140,9 @@ class TemplateInspector:
         if "comparison" in name:
             return "comparison"
 
+        if "section" in name:
+            return "section"
+
         if "two content" in name or object_count >= 2:
             return "two_columns"
 
@@ -149,8 +152,6 @@ class TemplateInspector:
         if "content" in name:
             return "content"
 
-        if "section" in name:
-            return "section"
 
         if "cover" in name or "title" in name or "first" in name:
             return "cover"
