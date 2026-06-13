@@ -259,3 +259,27 @@ class SlideCreator:
         fill = slide.background.fill
         fill.solid()
         fill.fore_color.rgb = RGBColor(r, g, b)
+
+    def add_uml_slide(self, prs_id: str, title: str, image_path: str) -> int:
+        """
+        Добавляет слайд с заголовком и PlantUML-диаграммой как изображением.
+        Использует layout с картинкой по центру (аналогично add_image_content_slide).
+        """
+        presentation = self.store.get(prs_id)
+        prs = presentation.prs
+
+        # Используем master с layout для изображения (idx=2, layout=4 — как в image_content)
+        master = prs.slide_masters[2]
+        slide = prs.slides.add_slide(master.slide_layouts[4])
+
+        title_ph = self._get_placeholder(slide, 0)
+        picture_ph = self._get_placeholder(slide, 13)  # placeholder для картинки
+
+        title_ph.text = title
+
+        if Path(image_path).exists():
+            picture_ph.insert_picture(image_path)
+        else:
+            raise ValueError(f"PlantUML image not found: {image_path}")
+
+        return len(prs.slides)

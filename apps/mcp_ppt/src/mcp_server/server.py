@@ -13,6 +13,7 @@ from src.services.presentation_creator import PresentationCreator
 from src.services.presentation_store import PresentationStore
 from src.services.slide_creator import SlideCreator
 from src.services.yandex_art_image_generator import YandexArtImageGenerator
+from src.services.plantuml_generator import PlantUMLImageGenerator
 
 # Create an MCP server
 mcp = FastMCP("PowerPoint Creator",  dependencies=["python-pptx","requests"], host="0.0.0.0", port=8001)
@@ -21,7 +22,9 @@ store = PresentationStore()
 presentation_service = PresentationCreator(store)
 slide_service = SlideCreator(store)
 image_service = YandexArtImageGenerator(**settings.YANDEX_ART_CONFIG)
+uml_service = PlantUMLImageGenerator(**settings.UML_CONFIG)
 print(settings.YANDEX_ART_CONFIG)
+print(settings.UML_CONFIG)
 
 @mcp.tool()
 def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
@@ -738,6 +741,9 @@ def add_image_content_slide(
         image_path = MEDIA_DIR / f"{image_id}.jpeg"
 
         if not image_path.exists():
+            image_path = MEDIA_DIR / f"{image_id}.png"
+
+        if not image_path.exists():
             return f"Error: image '{image_id}' not found"
 
         slide_number = slide_service.add_image_content_slide(
@@ -869,6 +875,47 @@ def add_agenda_slide(
 
     except Exception as e:
         return f"Error adding agenda slide: {str(e)}"
+
+@mcp.tool()
+def generate_uml_diagram(
+    plantuml_code: str,
+) -> dict:
+    """
+    Generate uml diagram as image and save it locally.
+
+    Use this tool when a presentation needs a generated uml diagram such as:
+    sequence, class, use case, activity, component, state, deplyment, object or thinking.
+
+    Args:
+        plantuml_code: The PlantUML definition code.
+                       Example:
+                       @startuml
+                       Alice -> Bob : Hello
+                       @enduml.
+
+    Returns:
+        Dict with:
+        - status
+        - image_id
+        - image_path
+        - image_url
+
+    Workflow:
+        1. Call create_presentation
+        2. Call generate_uml_image
+        3. Pass returned image_id to add_image_content_slide
+        4. Call save_presentation
+    """
+    try:
+        return uml_service.generate(
+        plantuml_code=plantuml_code,
+        )
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+        }
 
 @mcp.tool()
 def add_thank_you_slide(
