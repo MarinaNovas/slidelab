@@ -51,16 +51,21 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         - Do NOT call add_comparison_table_slide manually.
         - Do NOT call add_thank_you_slide manually.
         - Do NOT call save_presentation manually.
-        - This tool performs the full workflow internally.
 
-        Template rules:
-        - If the user uploaded or provided a PowerPoint template file, pass its public URL in metadata.template_url.
-        - If metadata.template_url is provided, the tool downloads the template, saves it into the local templates directory, inspects its layouts, and uses it for generation.
-        - If metadata.template_url is not provided, metadata.template_name may be used.
-        - If neither template_url nor template_name is provided, the default template is used.
-        - Only .pptx templates are supported.
-        - Do not pass local file paths in template_name.
-        - Do not call download_template separately when using this tool with metadata.template_url.
+        This tool performs the full workflow internally:
+        1. creates the presentation;
+        2. adds title slide;
+        3. adds agenda slide if agenda is provided;
+        4. adds section slides;
+        5. adds content slides;
+        6. generates images for image_content slides;
+        --- generated images from image.prompt
+        --- PlantUML diagrams from plantuml_code
+        7. adds image_content slides;
+        8. adds comparison table slides;
+        9. adds final thank-you slide if add_thank_you=true;
+        10. saves presentation if save=true;
+        11. returns download_url.
 
         Payload structure:
 
@@ -68,7 +73,6 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
           "metadata": {
             "title": "Presentation title",
             "subtitle": "Optional subtitle or short description",
-            "template_url": "https://example.com/templates/custom_template.pptx",
             "template_name": null
           },
           "agenda": [
@@ -109,6 +113,12 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
               }
             },
             {
+              "type": "image_content",
+              "title": "Diagram slide title",
+              "variant": "diagram",
+              "plantuml_code": "＠startuml ... ＠enduml"
+            },
+            {
               "type": "comparison_table",
               "title": "Comparison slide title",
               "sidebar_items": [
@@ -133,17 +143,10 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         - every slide.type
         - every slide.title
 
-        Supported slide types:
-        - section
-        - content
-        - image_content
-        - comparison_table
-
-        Slide type rules:
+        Slide types:
 
         1. section
         Use for section divider slides.
-
         Required:
         - type = "section"
         - title
@@ -155,8 +158,7 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         }
 
         2. content
-        Use for normal text slides with bullet points: ideas, conclusions, explanations, recommendations.
-
+        Use for normal text slides with bullet points: ideas, conclusions, explanations, recommendations..
         Required:
         - type = "content"
         - title
@@ -179,125 +181,109 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         }
 
         3. image_content
-
         Use for slides with visual content and bullet points.
 
-        Required:
-        - type = "image_content"
-        - title
-        - content
+        image_content supports two visual sources:
 
-        Image source:
+        - generated image via image.prompt
+        - PlantUML diagram via plantuml_code
 
-        image_content supports two image sources.
+        Option A: Generated image slide
+            Use generated image when the slide needs:
 
-        Option A: Generated image
+            - business illustration
+            - conceptual visual
+            - photo-like visual
+            - infographic
+            - abstract visual explanation
+            - visual metaphor
+            - educational illustration
+            - user scenario or case illustration
 
-        Use "image" when the slide needs:
-        - business illustration
-        - conceptual visual
-        - photo-like visual
-        - infographic
-        - abstract visual explanation
+            Required:
+            - type = "image_content"
+            - title
+            - subtitle
+            - content
+            - image.prompt
 
-        Required:
-        - image.prompt
+            Optional:
+            - section_title
+            - image.style
+            - image.width_ratio
+            - image.height_ratio
+            - image.seed
 
-        Optional:
-        - image.style
-        - image.width_ratio
-        - image.height_ratio
-        - image.seed
+        Option B: PlantUML diagram slide
+            Use PlantUML diagram when the slide needs a precise technical diagram:
 
-        Option B: PlantUML diagram
+            - architecture diagram
+            - component diagram
+            - sequence diagram
+            - workflow
+            - business process
+            - system interaction
+            - API flow
+            - data flow
 
-        Use "plantuml_code" when the slide needs a precise technical diagram:
+            Required:
+            - type = "image_content"
+            - title
+            - variant = "diagram"
+            - plantuml_code
 
-        - architecture diagram
-        - component diagram
-        - sequence diagram
-        - workflow
-        - system interaction
-        - API flow
-
-        Required:
-        - plantuml_code
-
-        PlantUML rules:
-        - plantuml_code must be a valid PlantUML source.
-        - plantuml_code must contain both @startuml and @enduml.
-        - Do not wrap plantuml_code in markdown code fences.
-        - Use a normal JSON string.
-        - Newlines should be represented using \\n inside JSON.
-
-        Optional:
-        - section_title
-        - subtitle
-        - variant
-
-        variant:
-
-        Optional image_content layout variant.
-
-        Currently supported values:
-        - null
-        - "diagram"
-
-        Meaning:
-        - null      -> default image_content layout
-        - "diagram" -> diagram layout
+            Optional:
+            - subtitle
+            - section_title
+            - content
 
         Rules:
-        - Use variant="diagram" when using plantuml_code.
-        - Use variant="diagram" for architecture, workflow and technical diagrams.
-        - For all other image_content slides omit variant.
-
-        General rules:
         - Use either image or plantuml_code, not both.
-        - The tool generates the image internally.
+        - Use image.prompt by default for visual explanations, concepts, examples and cases.
+        - Use plantuml_code only for strict diagrams, architecture, workflows, processes and component interactions.
+        - When using plantuml_code, set variant = "diagram".
+        - When using plantuml_code, do not pass image.
+        - When using image.prompt, omit variant.
+        - plantuml_code must contain both @startuml and @enduml.
+        - The tool generates the visual content internally.
         - Do not pass image_id manually.
         - The visual content must support the slide content.
         - Keep bullet points short.
+        - Choice between image.prompt and plantuml_code is made separately for each slide.
+        - One presentation may freely mix image_content + image.prompt slides and image_content + plantuml_code slides.
 
         Example 1: Generated image
-
         {
-          "type": "image_content",
-          "title": "AI-assisted Presentation Workflow",
-          "section_title": "Solution Architecture",
-          "subtitle": "From user request to final .pptx",
-          "content": [
-            "Agent collects the requirements",
-            "MCP receives a structured plan",
-            "PowerPoint file is generated automatically"
-          ],
-          "image": {
-            "prompt": "modern business workflow diagram, AI assistant creating presentation slides, clean corporate style",
-            "style": "business illustration",
-            "width_ratio": 1,
-            "height_ratio": 1,
-            "seed": null
-          }
+        "type": "image_content",
+        "title": "AI-assisted Presentation Workflow",
+        "section_title": "Solution Architecture",
+        "subtitle": "From user request to final .pptx",
+        "content": [
+        "Agent collects the requirements",
+        "MCP receives a structured plan",
+        "PowerPoint file is generated automatically"
+        ],
+        "image": {
+        "prompt": "modern business workflow illustration, AI assistant creating presentation slides, clean corporate style",
+        "style": "business illustration",
+        "width_ratio": 1,
+        "height_ratio": 1,
+        "seed": null
+        }
         }
 
         Example 2: PlantUML diagram
 
         {
-          "type": "image_content",
-          "title": "MCP Presentation Pipeline",
-          "subtitle": "Template-based generation flow",
-          "variant": "diagram",
-          "content": [
-            "Template download",
-            "Template inspection",
-            "Slide generation"
-          ],
-          "plantuml_code": "@startuml\\nactor User\\ncomponent MCP\\ncomponent PowerPoint\\nUser --> MCP\\nMCP --> PowerPoint\\n@enduml"
+        "type": "image_content",
+        "title": "MCP Presentation Pipeline",
+        "subtitle": "Template-based generation flow",
+        "variant": "diagram",
+        "plantuml_code": "@startuml\nactor User\nparticipant Agent\nparticipant OlegaPowerCreator\nUser -> Agent: Request presentation\nAgent -> OlegaPowerCreator: Send JSON payload\nOlegaPowerCreator -> OlegaPowerCreator: Generate slides\nOlegaPowerCreator --> Agent: Return download_url\n@enduml"
         }
 
         4. comparison_table
-        Use only for comparisons, metrics, structured data, KPIs, risks, features, scenarios, or decision matrices.
-
+        Use only for comparisons, metrics, structured data, KPIs, risks, features or scenarios.
         Required:
         - type = "comparison_table"
         - title
@@ -333,15 +319,17 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
 
         Global rules:
         - Start each major section with a section slide.
-        - After each section slide, add 1–3 main slides.
-        - Use image_content for visual explanations.
-        - Use content for ideas, conclusions, explanations and recommendations.
+        - After section slide, add 1–3 main slides.
+        - Use image_content for visual explanation.
+        - Use content for ideas, conclusions and explanations.
         - Use comparison_table only when table format is really needed.
-        - Keep all slide text short enough to fit.
+        - Keep all text short enough to fit on slides.
         - Do not include markdown in slide text.
         - Do not include HTML in slide text.
-        - Do not include speaker notes.
+        - Do not include speaker notes in this payload unless schema supports them.
         - Do not invent unsupported slide types.
+        - Supported slide types are only:
+          section, content, image_content, comparison_table.
 
         Returns:
         {
