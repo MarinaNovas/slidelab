@@ -158,7 +158,7 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         }
 
         2. content
-        Use for normal text slides with bullet points.
+        Use for normal text slides with bullet points: ideas, conclusions, explanations, recommendations..
         Required:
         - type = "content"
         - title
