@@ -49,6 +49,8 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         4. adds section slides;
         5. adds content slides;
         6. generates images for image_content slides;
+        --- generated images from image.prompt
+        --- PlantUML diagrams from plantuml_code
         7. adds image_content slides;
         8. adds comparison table slides;
         9. adds final thank-you slide if add_thank_you=true;
@@ -99,6 +101,12 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
                 "height_ratio": 1,
                 "seed": null
               }
+            },
+            {
+              "type": "image_content",
+              "title": "Diagram slide title",
+              "variant": "diagram",
+              "plantuml_code": "＠startuml ... ＠enduml"
             },
             {
               "type": "comparison_table",
@@ -163,46 +171,97 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         }
 
         3. image_content
-        Use for slides with generated image and bullet points.
+       Use for slides with visual content and bullet points.
+
+        image_content supports two visual sources:
+
+        - generated image via image.prompt
+        - PlantUML diagram via plantuml_code
+
+        Use generated image when the slide needs:
+
+        - business illustration
+        - conceptual visual
+        - photo-like visual
+        - infographic
+        - abstract visual explanation
+        - visual metaphor
+        - educational illustration
+        - user scenario or case illustration
+
+        Use PlantUML diagram when the slide needs a precise technical diagram:
+
+        - architecture diagram
+        - component diagram
+        - sequence diagram
+        - workflow
+        - business process
+        - system interaction
+        - API flow
+        - data flow
+
         Required:
+
         - type = "image_content"
         - title
+        - subtitle
         - content
-        - image.prompt
+        - either image.prompt or plantuml_code
 
         Optional:
+
         - section_title
-        - subtitle
         - image.style
         - image.width_ratio
         - image.height_ratio
         - image.seed
+        - variant = null or "diagram"
 
         Rules:
-        - Use this slide type for approximately 30–50% of main slides.
-        - The image prompt must describe the visual scene clearly.
-        - The image must support the slide content.
-        - Do not pass image_id manually.
-        - The tool generates the image internally.
 
-        Example:
+        - Use either image or plantuml_code, not both.
+        - Use image.prompt by default for visual explanations, concepts, examples and cases.
+        - Use plantuml_code only for strict diagrams, architecture, workflows, processes and component interactions.
+        - When using plantuml_code, set variant = "diagram".
+        - When using plantuml_code, do not pass image.
+        - When using image.prompt, omit variant.
+        - plantuml_code must contain both @startuml and @enduml.
+        - The tool generates the visual content internally.
+        - Do not pass image_id manually.
+        - The visual content must support the slide content.
+        - Keep bullet points short.
+        - Choice between image.prompt and plantuml_code is made separately for each slide.
+        - One presentation may freely mix image_content + image.prompt slides and image_content + plantuml_code slides.
+
+        Example 1: Generated image
+
         {
-          "type": "image_content",
-          "title": "AI-assisted Presentation Workflow",
-          "section_title": "Solution Architecture",
-          "subtitle": "From user request to final .pptx",
-          "content": [
-            "Agent collects the requirements",
-            "MCP receives a structured plan",
-            "PowerPoint file is generated automatically"
-          ],
-          "image": {
-            "prompt": "modern business workflow diagram, AI assistant creating presentation slides, clean corporate style",
-            "style": "business illustration",
-            "width_ratio": 1,
-            "height_ratio": 1,
-            "seed": null
-          }
+        "type": "image_content",
+        "title": "AI-assisted Presentation Workflow",
+        "section_title": "Solution Architecture",
+        "subtitle": "From user request to final .pptx",
+        "content": [
+        "Agent collects the requirements",
+        "MCP receives a structured plan",
+        "PowerPoint file is generated automatically"
+        ],
+        "image": {
+        "prompt": "modern business workflow illustration, AI assistant creating presentation slides, clean corporate style",
+        "style": "business illustration",
+        "width_ratio": 1,
+        "height_ratio": 1,
+        "seed": null
+        }
+        }
+
+        Example 2: PlantUML diagram
+
+        {
+        "type": "image_content",
+        "title": "MCP Presentation Pipeline",
+        "subtitle": "Template-based generation flow",
+        "variant": "diagram",
+        "plantuml_code": "@startuml\nactor User\nparticipant Agent\nparticipant OlegaPowerCreator\nUser -> Agent: Request presentation\nAgent -> OlegaPowerCreator: Send JSON payload\nOlegaPowerCreator -> OlegaPowerCreator: Generate slides\nOlegaPowerCreator --> Agent: Return download_url\n@enduml"
         }
 
         4. comparison_table
