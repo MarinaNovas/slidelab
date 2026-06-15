@@ -38,7 +38,7 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
     """
         Generate a complete PowerPoint presentation from one structured JSON payload.
 
-        Use this tool when the presentation plan is already prepared.
+        Use this tool when the full presentation plan is already prepared.
 
         IMPORTANT:
         - Do NOT call create_presentation manually.
@@ -337,10 +337,11 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
           "prs_id": "...",
           "download_url": "...",
           "slides_count": 10,
+          "template_name": "...",
           "log": [...]
         }
 
-        On error returns:
+        On error:
         {
           "status": "error",
           "message": "Error description",
