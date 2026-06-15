@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from pathlib import Path
 
@@ -20,3 +20,9 @@ def download_export(file_name: str):
         filename=file_name,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
     )
+
+@app.middleware("http")
+async def debug_headers(request: Request, call_next):
+    print("HEADERS:", dict(request.headers))
+    response = await call_next(request)
+    return response

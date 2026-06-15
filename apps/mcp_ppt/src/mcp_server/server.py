@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Context
 from typing import Optional
 
 from typing_extensions import Any
@@ -1182,3 +1182,29 @@ def inspect_template(template_name: str = "template_axenix.pptx") -> dict:
     template_path = DEFAULT_TEMPLATE if not template_name else TEMPLATES_DIR / template_name
     zzz = TemplateInspector.inspect(template_path)
     return zzz
+
+@mcp.tool()
+async def debug_request_context(ctx: Context) -> dict:
+    """
+        Inspect the current MCP execution context.
+
+        Returns all available metadata, session information and request context
+        passed by the MCP client or platform.
+
+        This tool is intended for debugging:
+        - user identification;
+        - authentication and authorization;
+        - session management;
+        - multi-user MCP integrations;
+        - platform-specific context propagation.
+
+        Use when investigating how the platform identifies users
+        and what information is available inside MCP tools.
+        """
+    return {
+        "context_type": str(type(ctx)),
+        "request_context": repr(getattr(ctx, "request_context", None)),
+        "meta": repr(getattr(ctx, "meta", None)),
+        "session_id": repr(getattr(ctx, "session_id", None)),
+        "client_id": repr(getattr(ctx, "client_id", None)),
+    }
