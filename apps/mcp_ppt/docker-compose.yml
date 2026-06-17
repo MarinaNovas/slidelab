@@ -48,7 +48,7 @@ services:
       KC_DB_PASSWORD: keycloak_password
 
       KC_PROXY_HEADERS: xforwarded
-      KC_HOSTNAME: https://olega-mcp.ru
+      KC_HOSTNAME: olega-mcp.ru
       KC_HTTP_ENABLED: "true"
     depends_on:
       - keycloak_db
