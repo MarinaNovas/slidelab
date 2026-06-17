@@ -4,6 +4,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
+    env_file:
+      - .env
     expose:
       - "8000"
     volumes:
@@ -15,6 +17,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.mcp
+    env_file:
+      - .env
     expose:
       - "8001"
     volumes:
