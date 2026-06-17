@@ -2,6 +2,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from pathlib import Path
 
+from src.config import settings
+
 EXPORTS_DIR = Path("exports")
 EXPORTS_DIR.mkdir(exist_ok=True)
 

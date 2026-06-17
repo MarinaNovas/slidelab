@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     API_PUBLIC_BASE_URL: str
     PLANTUML_SERVER_URL: str
 
+    OAUTH_ENABLED: bool = False
+    OAUTH_CLIENT_ID: str
+    OAUTH_CLIENT_SECRET: str
+    OAUTH_AUTH_BASE_URL: str
+    OAUTH_REQUIRED_SCOPE: str = "mcp:tools"
+    OAUTH_REQUIRED_AUDIENCE: str
+    OAUTH_RESOURCE_METADATA_URL: str
+
     @property
     def MCP_PPT_URL(self):
         return f"http://{self.LOCAL_HOST}:{self.MCP_PPT_PORT}/mcp"
@@ -30,7 +38,7 @@ class Settings(BaseSettings):
     @property
     def YANDEX_ART_CONFIG(self):
         return {
-        "folder_id": settings.YANDEX_FOLDER_ID,
+        "folder_id": self.YANDEX_FOLDER_ID,
         "auth": self.YANDEX_API_KEY,
         "images_dir": MEDIA_DIR,
         "public_base_url": self.PUBLIC_BASE_URL,
@@ -39,9 +47,25 @@ class Settings(BaseSettings):
     @property
     def UML_CONFIG(self):
         return {
-            "plantuml_server_url": settings.PLANTUML_SERVER_URL,
+            "plantuml_server_url": self.PLANTUML_SERVER_URL,
             "images_dir": MEDIA_DIR,
             "public_base_url": self.PUBLIC_BASE_URL,
         }
+
+    @property
+    def OAUTH_INTROSPECTION_URL(self) -> str:
+        return f"{self.OAUTH_AUTH_BASE_URL}/protocol/openid-connect/token/introspect"
+
+    @property
+    def OAUTH_PROTECTED_RESOURCE_METADATA(self) -> dict:
+        return {
+            "resource": self.OAUTH_REQUIRED_AUDIENCE,
+            "authorization_servers": [self.OAUTH_AUTH_BASE_URL],
+            "scopes_supported": [self.OAUTH_REQUIRED_SCOPE],
+        }
+
+    @property
+    def OAUTH_WWW_AUTHENTICATE(self) -> str:
+        return f'Bearer resource_metadata="{self.OAUTH_RESOURCE_METADATA_URL}"'
 
 settings = Settings()
