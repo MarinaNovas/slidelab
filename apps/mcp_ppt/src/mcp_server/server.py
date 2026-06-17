@@ -1,8 +1,12 @@
+from pydantic import AnyHttpUrl
+from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP, Context
 from typing import Optional
 
 from typing_extensions import Any
+from starlette.responses import JSONResponse
 
+from auth.token_verifier import IntrospectionTokenVerifier
 from src.api.app import EXPORTS_DIR
 from src.config import DEFAULT_TEMPLATE, MEDIA_DIR, settings, TEMPLATES_DIR
 from src.models.presentation import PresentationPlan
@@ -18,7 +22,29 @@ from src.services.yandex_art_image_generator import YandexArtImageGenerator
 from src.services.plantuml_generator import PlantUMLImageGenerator
 
 # Create an MCP server
-mcp = FastMCP("PowerPoint Creator",  dependencies=["python-pptx","requests"], host="0.0.0.0", port=8001)
+if settings.OAUTH_ENABLED:
+    token_verifier = IntrospectionTokenVerifier(
+        introspection_endpoint=settings.OAUTH_INTROSPECTION_URL,
+        client_id=settings.OAUTH_CLIENT_ID,
+        client_secret=settings.OAUTH_CLIENT_SECRET,
+        required_audience=settings.OAUTH_REQUIRED_AUDIENCE,
+    )
+
+    mcp = FastMCP(
+        name="OlegaPowerCreator",
+        instructions="MCP server for PowerPoint presentation generation",
+        host="0.0.0.0",
+        port=8001,
+        streamable_http_path="/mcp",
+        token_verifier=token_verifier,
+        auth=AuthSettings(
+            issuer_url=AnyHttpUrl(settings.OAUTH_AUTH_BASE_URL),
+            required_scopes=[settings.OAUTH_REQUIRED_SCOPE],
+            resource_server_url=AnyHttpUrl(settings.OAUTH_REQUIRED_AUDIENCE),
+        ),
+    )
+else:
+    mcp = FastMCP("OlegaPowerCreator",instructions="MCP server for PowerPoint presentation generation", dependencies = ["python-pptx", "requests"], host = "0.0.0.0", port = 8001)
 
 store = PresentationStore()
 presentation_service = PresentationCreator(store)
@@ -32,6 +58,18 @@ MOCk_URL = "https://numira.obs.ru-moscow-1.hc.sbercloud.ru/numira/knowledge_sour
 
 template_loader = TemplateLoader(TEMPLATES_DIR)
 template_inspector = TemplateInspector()
+
+@mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
+async def oauth_protected_resource():
+    return JSONResponse({
+        "resource": settings.OAUTH_REQUIRED_AUDIENCE,
+        "authorization_servers": [
+            settings.OAUTH_AUTH_BASE_URL,
+        ],
+        "scopes_supported": [
+            settings.OAUTH_REQUIRED_SCOPE,
+        ],
+    })
 
 @mcp.tool()
 def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
