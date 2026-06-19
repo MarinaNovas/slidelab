@@ -255,14 +255,9 @@ def generate_presentation_from_json(payload: dict[str, Any]) -> dict:
         Option B: PlantUML diagram slide
             Use PlantUML diagram when the slide needs a precise technical diagram:
 
-            - architecture diagram
             - component diagram
             - sequence diagram
-            - workflow
-            - business process
-            - system interaction
-            - API flow
-            - data flow
+            - activity diagram
 
             Required:
             - type = "image_content"
@@ -1096,7 +1091,7 @@ def generate_uml_diagram(
     Generate uml diagram as image and save it locally.
 
     Use this tool when a presentation needs a generated uml diagram such as:
-    sequence, class, use case, activity, component, state, deplyment, object or thinking.
+    sequence diagram, component diagram, activity diagram.
 
     Args:
         plantuml_code: The PlantUML definition code.
