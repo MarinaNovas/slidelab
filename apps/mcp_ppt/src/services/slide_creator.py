@@ -140,7 +140,11 @@ class SlideCreator:
         )
 
         title_ph = self._get_placeholder(slide, ph["title"])
-        body_ph = self._get_placeholder(slide, ph["body"])
+        body_idx = ph.get("body")
+        if body_idx is not None:
+            body_ph = self._get_placeholder(slide, body_idx)
+            body_ph.text = data.subtitle or ""
+
         content_idx = ph.get("content")
         if content_idx is not None:
             object_ph = self._get_placeholder(slide, content_idx)
@@ -156,11 +160,9 @@ class SlideCreator:
         picture_ph = self._get_placeholder(slide, ph["image"])
 
         title_ph.text = data.title
-        body_ph.text = data.subtitle or ""
-
 
         if data.image_path:
-            image_path = Path(data.image_path) #2bf37c60d1ae44c6b9f495035cc40eb0
+            image_path = Path(data.image_path)
 
             if not image_path.exists():
                 raise ValueError(f"Image not found: {image_path}")
